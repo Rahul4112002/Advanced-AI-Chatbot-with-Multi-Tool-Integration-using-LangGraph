@@ -1,6 +1,4 @@
 import streamlit as st
-from step3_tool_chatbot_backend import chatbot, retrieve_all_threads
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 import uuid
 import os
 
@@ -11,6 +9,16 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Import backend components with error handling
+try:
+    from step3_tool_chatbot_backend import chatbot, retrieve_all_threads
+    from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+    BACKEND_AVAILABLE = True
+except ImportError as e:
+    st.error(f"Backend import error: {e}")
+    st.error("Please check if all dependencies are installed correctly.")
+    BACKEND_AVAILABLE = False
 
 # =========================== Utilities ===========================
 def generate_thread_id():
@@ -98,6 +106,9 @@ st.title("🤖 AI Chatbot with LangGraph")
 st.markdown("Ask me anything! I can search the web, get stock prices, and perform calculations.")
 
 # Check for API key
+if not BACKEND_AVAILABLE:
+    st.stop()
+
 if not os.getenv("GROQ_API_KEY") and not st.secrets.get("GROQ_API_KEY"):
     st.error("⚠️ GROQ_API_KEY not found! Please add it to your Streamlit secrets.")
     st.stop()

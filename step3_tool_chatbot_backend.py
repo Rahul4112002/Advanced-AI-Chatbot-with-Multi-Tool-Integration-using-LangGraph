@@ -4,7 +4,11 @@ from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_groq import ChatGroq
-from langgraph.checkpoint.sqlite import SqliteSaver
+try:
+    from langgraph.checkpoint.sqlite import SqliteSaver
+except ImportError:
+    # Fallback for deployment environments
+    from langgraph.checkpoint.memory import MemorySaver as SqliteSaver
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_community.tools import DuckDuckGoSearchRun
@@ -112,20 +116,26 @@ tool_node = ToolNode(tools)
 # -------------------
 # 5. Checkpointer
 # -------------------
-# Use absolute path for database in cloud environment
-import tempfile
-import os
+# Use memory-based checkpointer for cloud deployment reliability
+try:
+    # Try SQLite first for local development
+    import tempfile
+    import os
 
-# Create database in a writable location
-if "HOME" in os.environ:
-    # Cloud environment
-    db_path = os.path.join(tempfile.gettempdir(), "chatbot.db")
-else:
-    # Local environment
-    db_path = "chatbot.db"
-
-conn = sqlite3.connect(database=db_path, check_same_thread=False)
-checkpointer = SqliteSaver(conn=conn)
+    # Create database in a writable location
+    if "HOME" in os.environ or "STREAMLIT_SHARING" in os.environ:
+        # Cloud environment - use memory saver for reliability
+        from langgraph.checkpoint.memory import MemorySaver
+        checkpointer = MemorySaver()
+    else:
+        # Local environment - use SQLite
+        db_path = "chatbot.db"
+        conn = sqlite3.connect(database=db_path, check_same_thread=False)
+        checkpointer = SqliteSaver(conn=conn)
+except Exception as e:
+    # Fallback to memory saver
+    from langgraph.checkpoint.memory import MemorySaver
+    checkpointer = MemorySaver()
 
 # -------------------
 # 6. Graph
@@ -145,7 +155,11 @@ chatbot = graph.compile(checkpointer=checkpointer)
 # 7. Helper
 # -------------------
 def retrieve_all_threads():
-    all_threads = set()
-    for checkpoint in checkpointer.list(None):
-        all_threads.add(checkpoint.config["configurable"]["thread_id"])
-    return list(all_threads)
+    try:
+        all_threads = set()
+        for checkpoint in checkpointer.list(None):
+            all_threads.add(checkpoint.config["configurable"]["thread_id"])
+        return list(all_threads)
+    except Exception as e:
+        # Return empty list if unable to retrieve threads
+        return []

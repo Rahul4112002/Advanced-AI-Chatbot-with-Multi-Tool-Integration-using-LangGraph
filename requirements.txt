@@ -14,14 +14,13 @@ python-dotenv>=1.0.0
 # HTTP requests
 requests>=2.31.0
 
-# Database dependencies (SQLite is built-in but these may be needed for advanced features)
+# Database dependencies
 sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
 
 # Additional dependencies that may be required by LangChain components
 pydantic>=2.0.0
 typing-extensions>=4.0.0
 
-# Optional: For better performance and additional features
-# tiktoken>=0.5.0  # For OpenAI token counting
-# faiss-cpu>=1.7.0  # For vector storage (if needed)
-# chromadb>=0.4.0  # Alternative vector database (if needed)
+# Search tools
+duckduckgo-search>=6.1.0
