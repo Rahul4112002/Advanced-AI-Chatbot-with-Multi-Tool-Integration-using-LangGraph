@@ -31,6 +31,7 @@ def get_api_key(key_name):
     
     # Try Streamlit secrets (for cloud deployment)
     try:
+        import streamlit as st
         return st.secrets[key_name]
     except:
         return None
@@ -38,15 +39,19 @@ def get_api_key(key_name):
 # -------------------
 # 1. LLM
 # -------------------
-# Get GROQ API key from environment or Streamlit secrets
-groq_api_key = get_api_key("GROQ_API_KEY")
-if not groq_api_key:
-    raise ValueError("GROQ_API_KEY not found in environment variables or Streamlit secrets")
+def get_llm():
+    """Get LLM instance with API key validation at runtime"""
+    groq_api_key = get_api_key("GROQ_API_KEY")
+    if not groq_api_key:
+        raise ValueError("GROQ_API_KEY not found in environment variables or Streamlit secrets")
+    
+    return ChatGroq(
+        model="llama-3.1-8b-instant",
+        api_key=groq_api_key
+    )
 
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    api_key=groq_api_key
-)
+# Initialize LLM lazily
+llm = None
 
 # -------------------
 # 2. Tools
@@ -94,7 +99,16 @@ def get_stock_price(symbol: str) -> dict:
 
 
 tools = [search_tool, get_stock_price, calculator]
-llm_with_tools = llm.bind_tools(tools)
+
+# Initialize tools with LLM lazily
+def get_llm_with_tools():
+    """Get LLM with tools, initializing LLM if needed"""
+    global llm
+    if llm is None:
+        llm = get_llm()
+    return llm.bind_tools(tools)
+
+llm_with_tools = None
 
 # -------------------
 # 3. State
@@ -107,6 +121,10 @@ class ChatState(TypedDict):
 # -------------------
 def chat_node(state: ChatState):
     """LLM node that may answer or request a tool call."""
+    global llm_with_tools
+    if llm_with_tools is None:
+        llm_with_tools = get_llm_with_tools()
+    
     messages = state["messages"]
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
@@ -140,16 +158,27 @@ except Exception as e:
 # -------------------
 # 6. Graph
 # -------------------
-graph = StateGraph(ChatState)
-graph.add_node("chat_node", chat_node)
-graph.add_node("tools", tool_node)
+def get_chatbot():
+    """Get chatbot instance, initializing if needed"""
+    graph = StateGraph(ChatState)
+    graph.add_node("chat_node", chat_node)
+    graph.add_node("tools", tool_node)
 
-graph.add_edge(START, "chat_node")
+    graph.add_edge(START, "chat_node")
+    graph.add_conditional_edges("chat_node", tools_condition)
+    graph.add_edge('tools', 'chat_node')
 
-graph.add_conditional_edges("chat_node",tools_condition)
-graph.add_edge('tools', 'chat_node')
+    return graph.compile(checkpointer=checkpointer)
 
-chatbot = graph.compile(checkpointer=checkpointer)
+# Initialize chatbot lazily
+chatbot = None
+
+def get_chatbot_instance():
+    """Get the chatbot instance, creating it if necessary"""
+    global chatbot
+    if chatbot is None:
+        chatbot = get_chatbot()
+    return chatbot
 
 # -------------------
 # 7. Helper

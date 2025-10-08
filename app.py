@@ -12,7 +12,7 @@ st.set_page_config(
 
 # Import backend components with error handling
 try:
-    from step3_tool_chatbot_backend import chatbot, retrieve_all_threads
+    from step3_tool_chatbot_backend import get_chatbot_instance, retrieve_all_threads
     from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
     BACKEND_AVAILABLE = True
 except ImportError as e:
@@ -36,6 +36,7 @@ def add_thread(thread_id):
 
 def load_conversation(thread_id):
     try:
+        chatbot = get_chatbot_instance()
         state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
         # Check if messages key exists in state values, return empty list if not
         return state.values.get("messages", [])
@@ -145,6 +146,7 @@ if user_input:
 
         def ai_only_stream():
             try:
+                chatbot = get_chatbot_instance()
                 for message_chunk, metadata in chatbot.stream(
                     {"messages": [HumanMessage(content=user_input)]},
                     config=CONFIG,
